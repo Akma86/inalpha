@@ -52,13 +52,17 @@ init() {
   credential_public_key="$(openssl pkey -in "$credential_private_pem" -pubout -outform DER | base64 | tr -d '\n')"
   rm -f "$credential_private_pem"
   credential_private_pem=""
-  python3 - "$SELFHOST_ENV_FILE" "$postgres_password" "$redis_password" "$jwt_secret" "$encryption_key" "$credential_private_key" "$credential_public_key" <<'PY'
+  local py_cmd="python3"
+  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import sys" >/dev/null 2>&1; then
+    py_cmd="python"
+  fi
+  "$py_cmd" - "$SELFHOST_ENV_FILE" "$postgres_password" "$redis_password" "$jwt_secret" "$encryption_key" "$credential_private_key" "$credential_public_key" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
 postgres_password, redis_password, jwt_secret, encryption_key, credential_private_key, credential_public_key = sys.argv[2:]
-content = path.read_text()
+content = path.read_text(encoding="utf-8")
 content = content.replace("POSTGRES_PASSWORD=\n", f"POSTGRES_PASSWORD={postgres_password}\n")
 content = content.replace("REDIS_PASSWORD=\n", f"REDIS_PASSWORD={redis_password}\n")
 content = content.replace("JWT_SECRET=\n", f"JWT_SECRET={jwt_secret}\n")
@@ -67,7 +71,7 @@ content = content.replace("EVOLUTION_CREDENTIAL_PRIVATE_KEY_B64=\n", f"EVOLUTION
 content = content.replace("EVOLUTION_CREDENTIAL_PUBLIC_KEY_B64=\n", f"EVOLUTION_CREDENTIAL_PUBLIC_KEY_B64={credential_public_key}\n")
 content = content.replace("__POSTGRES_PASSWORD__", postgres_password)
 content = content.replace("__REDIS_PASSWORD__", redis_password)
-path.write_text(content)
+path.write_text(content, encoding="utf-8", newline="\n")
 PY
   chmod 600 "$SELFHOST_ENV_FILE"
   printf 'Created infra/.env.selfhost with generated secrets.\n'
